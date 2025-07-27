@@ -13,3 +13,4 @@ python-jose[cryptography]==3.3.0
 itsdangerous==2.1.2
 python-multipart==0.0.6
 pydantic==2.5.0
+tokenizers==0.15.2
