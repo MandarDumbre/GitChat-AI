@@ -1,0 +1,13 @@
+# Python/Backend
+/backend/venv/
+/backend/__pycache__/
+/backend/.env
+
+# Node/Frontend
+/frontend/node_modules/
+/frontend/build/
+.DS_Store
+
+# IDE specific
+.vscode/
+.idea/
