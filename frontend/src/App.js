@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 
-// Configure marked for better rendering
+// Configure marked for better rendering (code blocks, etc.)
 marked.setOptions({
   gfm: true,
   breaks: true,
@@ -95,6 +95,11 @@ export default function App() {
   const [qnaError, setQnaError] = useState('');
   const [sources, setSources] = useState([]);
 
+  // README Generation state
+  const [generatedReadme, setGeneratedReadme] = useState('');
+  const [isGeneratingReadme, setIsGeneratingReadme] = useState(false);
+  const [readmeError, setReadmeError] = useState('');
+
   const API_BASE_URL = 'http://127.0.0.1:8000';
 
   // --- Auth Effects ---
@@ -102,12 +107,8 @@ export default function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
     if (urlToken) {
-      localStorage.setItem('github-assistant-token', urlToken);
       setToken(urlToken);
       window.history.replaceState({}, document.title, "/");
-    } else {
-      const storedToken = localStorage.getItem('github-assistant-token');
-      if (storedToken) setToken(storedToken);
     }
   }, []);
 
@@ -154,7 +155,6 @@ export default function App() {
   };
   
   const handleLogout = () => {
-    localStorage.removeItem('github-assistant-token');
     setToken(null);
     setUser(null);
   };
@@ -163,6 +163,36 @@ export default function App() {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
+    }
+  };
+
+  const handleGenerateReadme = async () => {
+    setReadmeError('');
+    setGeneratedReadme('');
+    setIsGeneratingReadme(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/generate_readme`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ url: repoUrl.trim() }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Failed to generate README. Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setGeneratedReadme(data.readme_content);
+    } catch (err) {
+      console.error("README Generation failed:", err);
+      setReadmeError(err.message || 'An unknown error occurred while generating the README.');
+    } finally {
+      setIsGeneratingReadme(false);
     }
   };
 
@@ -182,6 +212,8 @@ export default function App() {
     setIndexingStatus('idle');
     setIndexingDetail('');
     setIndexingProgress(0);
+    setGeneratedReadme('');
+    setReadmeError('');
     stopPolling();
     setIsLoading(true);
 
@@ -335,51 +367,82 @@ export default function App() {
         return 'bg-yellow-900/50 border-yellow-600';
     }
   };
+  
+  const getRelevanceColor = (relevance) => {
+    if (relevance === 'high') return 'border-green-500';
+    if (relevance === 'medium') return 'border-yellow-500';
+    return 'border-gray-600';
+  };
+
+  // --- Conditional Rendering ---
+
+  // 1. If no token, show the login screen.
+  if (!token) {
+    return (
+      <div className="bg-gray-900 text-white min-h-screen font-sans flex flex-col justify-center items-center p-4 text-center">
+        <div className="space-y-8 max-w-lg">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-600">
+              GitChat AI
+            </h1>
+            <h2 className="text-xl md:text-2xl text-gray-400 mt-2">The Intelligent Assistant and Readme Generator</h2>
+          </div>
+          <p className="text-gray-300 text-xl">
+            Login with GitHub to continue
+          </p>
+          <button 
+            onClick={handleLogin} 
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg flex items-center transition-colors text-lg mx-auto shadow-lg hover:shadow-indigo-500/50"
+          >
+            <GithubIcon />
+            <span className="ml-3">Login</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. If there's a token but no user object yet, we are authenticating.
+  if (!user) {
+    return (
+      <div className="bg-gray-900 text-white min-h-screen font-sans flex flex-col justify-center items-center">
+        <div className="flex items-center">
+          <LoadingSpinner />
+          <p className="ml-4 text-lg text-gray-300">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gray-900 text-white min-h-screen font-sans">
       <div className="container mx-auto p-4 md:p-8">
         <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <h1 className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-600">
-            GitHub Intelligence Assistant
+            GitChat AI
           </h1>
-          <div>
-            {user ? (
-              <div className="flex items-center space-x-4">
-                <img 
-                  src={user.avatar_url} 
-                  alt={user.name || user.sub} 
-                  className="w-10 h-10 rounded-full border-2 border-indigo-500"
-                />
-                <span className="hidden md:inline text-gray-300">
-                  {user.name || user.sub}
-                </span>
-                <button 
-                  onClick={handleLogout} 
-                  className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
-                >
-                  <LogoutIcon />
-                  <span>Logout</span>
-                </button>
-              </div>
-            ) : (
-              <button 
-                onClick={handleLogin} 
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center transition-colors"
-              >
-                <GithubIcon />
-                <span className="ml-2">Login with GitHub</span>
-              </button>
-            )}
+          <div className="flex items-center space-x-4">
+            <img 
+              src={user.avatar_url} 
+              alt={user.name || user.sub} 
+              className="w-10 h-10 rounded-full border-2 border-indigo-500"
+            />
+            <span className="hidden md:inline text-gray-300">
+              {user.name || user.sub}
+            </span>
+            <button 
+              onClick={handleLogout} 
+              className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+            >
+              <LogoutIcon />
+              <span>Logout</span>
+            </button>
           </div>
         </header>
 
         <div className="text-center mb-12">
           <p className="text-gray-400 mt-4 max-w-2xl mx-auto">
-            {user 
-              ? `Welcome, ${user.name || user.sub}! Analyze your private repositories or any public repository with AI-powered code understanding.` 
-              : "Login to analyze private repositories, or paste a public repository URL to get started with AI-powered code analysis."
-            }
+            Welcome, {user.name || user.sub}! Analyze any public repository with AI-powered interactions.
           </p>
         </div>
 
@@ -393,10 +456,7 @@ export default function App() {
                 type="text" 
                 value={repoUrl} 
                 onChange={(e) => setRepoUrl(e.target.value)}
-                placeholder={user 
-                  ? "e.g., https://github.com/your-name/your-private-repo" 
-                  : "e.g., https://github.com/langchain-ai/langchain"
-                }
+                placeholder="e.g., https://github.com/owner-name/repo-name"
                 className="w-full p-2 bg-transparent text-white focus:outline-none"
                 onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleAnalyze()}
                 disabled={isLoading}
@@ -452,7 +512,17 @@ export default function App() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   {/* README Section */}
                   <div className="lg:col-span-2 bg-gray-800/50 border border-gray-700 rounded-lg p-6">
-                    <h3 className="text-xl font-bold text-white mb-4">README.md</h3>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-xl font-bold text-white">README.md</h3>
+                      <button
+                        onClick={handleGenerateReadme}
+                        disabled={isGeneratingReadme}
+                        className="bg-teal-600 hover:bg-teal-700 disabled:bg-teal-900/50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg flex items-center transition-colors text-sm"
+                      >
+                        {isGeneratingReadme ? <LoadingSpinner /> : <SparklesIcon />}
+                        <span className="ml-2">{isGeneratingReadme ? 'Generating...' : 'Generate README'}</span>
+                      </button>
+                    </div>
                     <div 
                       className="prose prose-invert prose-sm md:prose-base max-w-none text-gray-300 h-96 overflow-auto border border-gray-700 rounded-md p-4 bg-gray-900/50" 
                       dangerouslySetInnerHTML={{ __html: marked(analysis.readmeContent) }} 
@@ -513,6 +583,33 @@ export default function App() {
                   </div>
                 </div>
                 
+                {/* Generated README Section */}
+                {isGeneratingReadme && (
+                  <div className="mt-8 p-6 bg-gray-800/50 border border-gray-700 rounded-lg flex items-center justify-center">
+                    <LoadingSpinner />
+                    <p className="ml-4 text-gray-300">Generating new README, this may take a moment...</p>
+                  </div>
+                )}
+                {readmeError && (
+                  <div className="mt-8 p-4 bg-red-900/50 border border-red-600 rounded-lg">
+                    <p className="text-red-200 text-center">{readmeError}</p>
+                  </div>
+                )}
+                {generatedReadme && (
+                  <div className="mt-8 bg-gray-800/50 border border-gray-700 rounded-lg p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-xl font-bold text-white flex items-center">
+                        <SparklesIcon />
+                        <span className="ml-2">Generated README</span>
+                      </h3>
+                    </div>
+                    <div
+                      className="prose prose-invert max-w-none text-gray-300 border border-gray-700 rounded-md p-4 bg-gray-900/50"
+                      dangerouslySetInnerHTML={{ __html: marked(generatedReadme) }}
+                    />
+                  </div>
+                )}
+
                 {/* Q&A Section */}
                 <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
                   <h2 className="text-2xl font-bold text-white mb-4 flex items-center">
@@ -600,11 +697,10 @@ export default function App() {
                             <SparklesIcon />
                             <h4 className="text-lg font-semibold text-white ml-2">AI Analysis</h4>
                           </div>
-                          <div className="prose prose-invert max-w-none">
-                            <pre className="whitespace-pre-wrap text-gray-300 text-sm leading-relaxed font-sans">
-                              {answer}
-                            </pre>
-                          </div>
+                          <div 
+                            className="prose prose-invert max-w-none text-gray-300"
+                            dangerouslySetInnerHTML={{ __html: marked(answer) }}
+                          />
                         </div>
 
                         {/* Sources */}
@@ -617,10 +713,10 @@ export default function App() {
                               {sources.map((source, index) => (
                                 <span 
                                   key={index}
-                                  className="bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs font-mono"
-                                  title={source}
+                                  className={`bg-gray-700 text-gray-300 px-2 py-1 rounded text-xs font-mono border-l-2 ${getRelevanceColor(source.relevance)}`}
+                                  title={`Type: ${source.type} | Relevance: ${source.relevance}`}
                                 >
-                                  {source}
+                                  {source.file}
                                 </span>
                               ))}
                             </div>
@@ -665,19 +761,8 @@ export default function App() {
         {/* Footer */}
         <footer className="mt-16 text-center text-gray-500 text-sm border-t border-gray-800 pt-8">
           <p>
-            GitHub Intelligence Assistant - Powered by AI for smarter code analysis
+            GitChat AI - Powered by AI for Smarter Code Analysis
           </p>
-          {!user && (
-            <p className="mt-2">
-              <button 
-                onClick={handleLogin}
-                className="text-indigo-400 hover:text-indigo-300 underline"
-              >
-                Login with GitHub
-              </button>
-              {' '}to access private repositories
-            </p>
-          )}
         </footer>
       </div>
     </div>
