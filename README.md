@@ -146,13 +146,42 @@ SECRET_KEY=very_long_secure_key_here
 ## 🗂️ Project Structure
 
 ```bash
-gitchat-ai/
-├── main.py              # FastAPI backend with Groq + LangChain logic
-├── .env                 # Environment variables
-├── requirements.txt     # Backend dependencies
+GitChat-AI/
+├── Backend/
+│   ├── __pycache__/
+│   ├── .gitignore
+│   ├── main.py
+│   └── requirements.txt
+│
 ├── frontend/
-│   ├── App.js           # React frontend (Login, Analyze, README, Q&A)
-│   └── ...
+│   ├── public/
+│   │   ├── favicon.ico
+│   │   ├── index.html
+│   │   ├── logo192.png
+│   │   ├── logo512.png
+│   │   ├── manifest.json
+│   │   └── robots.txt
+│   │
+│   ├── src/
+│   │   ├── App.css
+│   │   ├── App.js
+│   │   ├── App.test.js
+│   │   ├── index.css
+│   │   ├── index.js
+│   │   ├── logo.svg
+│   │   ├── reportWebVitals.js
+│   │   └── setupTests.js
+│   │
+│   ├── .gitignore
+│   ├── README.md
+│   ├── index.css
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   └── tailwind.config.js
+│
+└── README.md
+
 ```
 
 ---
